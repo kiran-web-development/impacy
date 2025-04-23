@@ -1,4 +1,5 @@
 import sys
+from setuptools import find_packages, setup
 import pkg_resources
 import subprocess
 import os
