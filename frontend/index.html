@@ -10,11 +10,13 @@
     <div class="container">
         <h1>Medical Image Analysis System</h1>
         <div class="upload-section">
-            <input type="file" id="imageInput" accept="image/*,.dcm" />
+            <label for="imageInput">Select a medical image file:
+                <input type="file" id="imageInput" accept="image/*,.dcm" title="Upload medical image" placeholder="Choose file" />
+            </label>
             <button id="analyzeBtn">Analyze Image</button>
         </div>
         <div class="preview-section">
-            <img id="imagePreview" alt="Preview" style="display: none;" />
+            <img id="imagePreview" alt="Preview" class="hidden" />
         </div>
         <div id="results" class="results-section"></div>
     </div>
