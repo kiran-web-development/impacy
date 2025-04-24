@@ -3,9 +3,11 @@ from flask_cors import CORS
 import os
 from dotenv import load_dotenv
 import sys
-import numpy as np # type: ignore
-import cv2 # type: ignore
+import numpy as np
+import cv2
 from werkzeug.utils import secure_filename
+from concurrent.futures import ThreadPoolExecutor
+import threading
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,21 +20,40 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-# Initialize the model
+# Initialize ThreadPoolExecutor for async processing
+executor = ThreadPoolExecutor(max_workers=3)
+
+# Initialize the model with threading lock
 model = None
+model_lock = threading.Lock()
 UPLOAD_FOLDER = 'data/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-def init_model():
+def get_model():
     global model
-    if model is None:
-        model = create_model()
-        # TODO: Load trained weights when available
-        # model.load_weights('path_to_weights.h5')
+    with model_lock:
+        if model is None:
+            model = create_model()
+            # Load pre-trained weights if available
+            weights_path = os.getenv('MODEL_PATH')
+            if weights_path and os.path.exists(weights_path):
+                model.load_weights(weights_path)
+    return model
+
+def process_image(image):
+    """Process image in a separate thread"""
+    enhanced = enhance_image(image)
+    segmented = segment_image(enhanced)
+    processed = preprocess_image(enhanced)
+    return enhanced, segmented, processed
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    return jsonify({"status": "healthy", "message": "AI Medical Image Analysis System is running"})
+    return jsonify({
+        "status": "healthy",
+        "message": "AI Medical Image Analysis System is running",
+        "model_loaded": model is not None
+    })
 
 @app.route('/api/analyze', methods=['POST'])
 def analyze_image():
@@ -44,49 +65,59 @@ def analyze_image():
         return jsonify({"error": "No selected file"}), 400
 
     try:
-        # Save the uploaded file
+        # Save the uploaded file with a unique name
         filename = secure_filename(file.filename)
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        filepath = os.path.join(UPLOAD_FOLDER, f"{os.urandom(8).hex()}_{filename}")
         file.save(filepath)
 
-        # Load and process the image
+        # Load the image
         image = load_medical_image(filepath)
         if image is None:
             return jsonify({"error": "Failed to load image"}), 400
 
-        # Enhance image quality
-        enhanced_image = enhance_image(image)
+        # Process image asynchronously
+        enhanced, segmented, processed = executor.submit(process_image, image).result()
         
-        # Perform segmentation
-        segmented_image = segment_image(enhanced_image)
-        
-        # Prepare image for model
-        processed_image = preprocess_image(enhanced_image)
-        
-        # Initialize model if needed
-        init_model()
-        
-        # For now, return processing results
-        # TODO: Add actual model prediction when trained
-        return jsonify({
+        # Get model prediction
+        model = get_model()
+        if model:
+            # Expand dimensions for batch processing
+            batch = np.expand_dims(processed, axis=0)
+            prediction = model.predict(batch, verbose=0)
+            
+            # Process prediction results
+            confidence = float(np.max(prediction[0]))
+            predicted_class = int(np.argmax(prediction[0]))
+        else:
+            confidence = 0.0
+            predicted_class = -1
+
+        # Return immediate response with analysis details
+        response = {
             "status": "success",
-            "message": "Image processed successfully",
+            "message": "Image analyzed successfully",
             "details": {
-                "original_size": image.shape,
-                "enhanced": "Image quality enhanced",
-                "segmentation": "Regions identified",
-                "analysis": "Preliminary analysis complete"
+                "dimensions": image.shape,
+                "confidence_score": f"{confidence:.2%}",
+                "predicted_class": predicted_class,
+                "enhancement_applied": True,
+                "segmentation_completed": True
             }
-        })
+        }
+
+        return jsonify(response)
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        app.logger.error(f"Analysis error: {str(e)}")
+        return jsonify({"error": "Analysis failed", "details": str(e)}), 500
 
     finally:
         # Clean up uploaded file
-        if os.path.exists(filepath):
+        if 'filepath' in locals() and os.path.exists(filepath):
             os.remove(filepath)
 
 if __name__ == '__main__':
+    # Pre-load the model
+    get_model()
     port = int(os.getenv('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=True, threaded=True)

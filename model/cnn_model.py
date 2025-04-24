@@ -1,5 +1,5 @@
-import tensorflow as tf
-from tensorflow.keras import layers, models
+import tensorflow as tf # type: ignore
+from tensorflow.keras import layers, models # type: ignore
 
 def create_model(input_shape=(224, 224, 3), num_classes=2):
     """

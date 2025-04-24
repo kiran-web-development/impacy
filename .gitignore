@@ -24,6 +24,10 @@ wheels/
 
 # Environment variables
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # Uploads and model weights
 data/uploads/
@@ -36,13 +40,51 @@ model/weights/
 # Logs
 *.log
 logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
 # Training data
 data/raw/
 data/processed/
 
-# JavaScript
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Dependencies
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Build directories
+/build
+/dist
+/.next
+/.nuxt
+/out
+
+# Cache
+.cache
+.npm
+.eslintcache
+.stylelintcache
+.parcel-cache
+
+# Testing
+/coverage
+.nyc_output
+
+# Misc
+.DS_Store
+Thumbs.db
